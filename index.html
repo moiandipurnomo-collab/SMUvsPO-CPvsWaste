@@ -251,7 +251,7 @@ async function live(){
  catch(e){el.style.color="#ffd36b";el.textContent="Gagal memuat dari Google Sheets ("+e.message+"). Menampilkan "+(liveOk?"data terakhir yang berhasil dimuat":"snapshot")+"."}
  b.disabled=false;busy=false}
 $("#rf").onclick=live;
-setInterval(live,REFRESH_MIN*6000);
+setInterval(live,REFRESH_MIN*60000);
 live();
 
 </script>
