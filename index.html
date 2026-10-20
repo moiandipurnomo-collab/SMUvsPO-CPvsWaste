@@ -202,7 +202,7 @@ function extra(){
 }
 init();
 /* ===== Data live dari Google Sheets ===== */
-const SHEET_URL="https://docs.google.com/spreadsheets/d/1QuInDy-fl7GoEw5_do4O_xAasMmY/edit?usp=sharing";
+const SHEET_URL="https://docs.google.com/spreadsheets/d/1QuInDy-fl7GoEw5_du6KNKXRQinpHcRDo4O_xAasMmY/edit?usp=sharing";
 const REFRESH_MIN=5;
 const SID=SHEET_URL.match(/\/d\/([\w-]+)/)[1];
 //<pure>
@@ -251,7 +251,7 @@ async function live(){
  catch(e){el.style.color="#ffd36b";el.textContent="Gagal memuat dari Google Sheets ("+e.message+"). Menampilkan "+(liveOk?"data terakhir yang berhasil dimuat":"snapshot")+"."}
  b.disabled=false;busy=false}
 $("#rf").onclick=live;
-setInterval(live,REFRESH_MIN*60000);
+setInterval(live,REFRESH_MIN*6000);
 live();
 
 </script>
