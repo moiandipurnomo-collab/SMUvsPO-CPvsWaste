@@ -58,6 +58,15 @@ td{border-bottom:1px solid var(--line)}tr.tot td{font-weight:700;background:var(
 .more{margin-top:12px;font:inherit;font-size:14px;background:none;border:1px solid var(--line);border-radius:6px;padding:7px 14px;color:var(--ink);cursor:pointer}
 .empty{padding:28px;text-align:center;color:var(--mute)}
 .note{font-size:13px;color:var(--mute);margin-top:28px}
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cc{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:12px 14px}
+.cc h3{margin:0 0 4px;font:700 16px "Bricolage Grotesque",Figtree,sans-serif;display:flex;align-items:center;gap:7px}
+.cc h3 s{width:10px;height:10px;border-radius:2px;display:inline-block}
+.cc table{font-size:13px;margin-top:6px}.cc th,.cc td{padding:5px 8px}
+.chip.n{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+.pie{max-width:230px;margin:6px auto 0}.pie text{fill:#fff;font-size:13px;font-weight:700}
+.cn{font-size:13px;color:var(--mute);margin:10px 0 0}
+@media(max-width:760px){.cg{grid-template-columns:1fr}}
 @media(max-width:760px){.hero,.rk{grid-template-columns:1fr}.bar{padding:10px 14px}}
 @media(prefers-reduced-motion:no-preference){.row .b{transition:width .3s}}
 </style>
@@ -78,6 +87,12 @@ td{border-bottom:1px solid var(--line)}tr.tot td{font-weight:700;background:var(
  <section><h2 id="ct"></h2><p class="sub">Centang atau hapus centang untuk menampilkan atau menyembunyikan data. Arahkan kursor ke batang untuk rincian.</p>
   <div class="lg" id="sr"><label><input type="checkbox" data-k="smu" checked><s style="background:var(--smu)"></s>SMU</label><label><input type="checkbox" data-k="waste" checked><s style="background:var(--waste)"></s>Waste</label><label><input type="checkbox" data-k="po" checked><s style="background:var(--po)"></s>PO</label><label><input type="checkbox" data-k="cp" checked><s style="background:var(--cp)"></s>CP</label><label><input type="checkbox" data-k="pct" checked><s style="background:var(--ink);height:3px;border-radius:0;vertical-align:middle"></s>Waste % SMU (garis)</label></div>
   <div id="ch"></div></section>
+ <section id="cmp"><h2>Perbandingan antar minggu</h2><p class="sub" id="cmps"></p>
+  <div class="tools"><label style="color:var(--mute);flex-direction:row;align-items:center;gap:8px">Minggu A<select id="ca"></select></label>
+  <label style="color:var(--mute);flex-direction:row;align-items:center;gap:8px">Minggu B<select id="cw"></select></label>
+  <button class="more" id="cx" style="margin:0">Tukar A ↔ B</button></div>
+  <div class="lg"><span><s style="background:var(--ink);opacity:.4"></s>Minggu A (warna pudar)</span><span><s style="background:var(--ink)"></s>Minggu B (warna pekat)</span></div>
+  <div class="cg" id="cg"></div><p class="cn" id="cnote"></p></section>
  <section><h2>Pola rata-rata per hari dalam seminggu</h2><p class="sub" id="ws1"></p><div id="wd"></div></section>
  <section><h2>Rata-rata harian per buah</h2><p class="sub" id="fs"></p>
   <div class="tools"><label style="color:var(--mute);flex-direction:row;align-items:center;gap:8px">Pilih hari<select id="fd"></select></label></div>
@@ -160,7 +175,7 @@ function render(){
  else if(S.view=="mingguan"){first="Minggu";title="Rekap mingguan, "+ml(S.mo);P1=W.map(w=>({...sum(w.s,w.e,T),l:w.label+" ("+dl(w.s)+"–"+dl(w.e)+")",c:"M"+w.i,on:w.i==S.wk})).filter(x=>x.n)}
  else{first="Bulan";title="Rekap bulanan";P1=months.map(m=>({...sum(m+"-01",mEnd(m),T),l:ml(m),c:MON[+m.slice(5)-1].slice(0,3),on:m==S.mo}))}
  $("#ct").textContent=title.replace("Rekap","Grafik");$("#tt").textContent=title+" – "+bn;
- chart(P1,$("#ch"));extra();
+ chart(P1,$("#ch"));extra();cmp();
  const ex=S.view!="harian";
  $("#tb").innerHTML=P1.length?`<table><thead><tr><th>${first}</th><th>PO</th><th>CP</th><th>SMU</th><th>Waste</th><th>Waste % SMU</th><th>% Terjual</th>${ex?"<th>Hari</th><th>SMU/hari</th>":""}</tr></thead><tbody>`+
   [...P1,{...K,l:S.view=="bulanan"?"Total "+ml(S.mo):"Total",tot:1}].map(x=>{if(S.view=="bulanan"&&x.tot)return"";const w=dv(x.waste,x.smu);return`<tr class="${x.tot?"tot":""}" ${x.on?'style="background:var(--hi)"':""}><td>${x.l}</td><td>${rp(x.po)}</td><td>${rp(x.cp)}</td><td>${rp(x.smu)}</td><td>${rp(x.waste)}</td><td><span class="chip ${cls(w)}">${pc(w)}</span></td><td>${pc(dv(x.smu,x.po+x.cp))}</td>${ex?`<td>${x.n}</td><td>${rp(dv(x.smu,x.n))}</td>`:""}</tr>`}).join("")+"</tbody></table>":'<div class="empty">Tidak ada data untuk pilihan ini.</div>';
@@ -200,9 +215,50 @@ function extra(){
  $("#fs").textContent="Rata-rata per hari untuk tiap buah, "+bn+", "+(sel===null?"semua hari ("+nd+" hari berdata)":"hari "+dn[sel]+" ("+nd+" hari berdata)")+". PO-CP = PO + CP. Diurutkan dari SMU tertinggi.";
  chart(items,$("#fr"),["smu","pocp","waste"]);
 }
+/* ===== Perbandingan antar minggu ===== */
+const C={a:null,b:null},MK=[["po","PO"],["cp","CP"],["smu","SMU"],["waste","Waste"]];
+const ymd=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+function wkList(){const m=new Map();
+ D.dates.forEach((d,i)=>{const dt=new Date(d+"T00:00:00"),o=(dt.getDay()+6)%7,mon=new Date(dt);mon.setDate(dt.getDate()-o);const k=ymd(mon);
+  let w=m.get(k);if(!w){const sun=new Date(mon);sun.setDate(mon.getDate()+6);w={k,s:k,e:ymd(sun),idx:[]};m.set(k,w)}w.idx.push(i)});
+ return[...m.values()].sort((x,y)=>x.k<y.k?-1:1)}
+function pie(tA,tB,col,lb){
+ const t=tA+tB;if(t<=0)return'<div class="empty">Tidak ada data.</div>';
+ const r=84,c=100,pa=tA/t,pt=(f,v)=>[c+r*Math.sin(2*Math.PI*f),c-r*Math.cos(2*Math.PI*f)];
+ const lab=(f0,f1,v)=>{if(v<.06)return"";const m=(f0+f1)/2,x=c+r*.62*Math.sin(2*Math.PI*m),y=c-r*.62*Math.cos(2*Math.PI*m);return`<text x="${x}" y="${y+4}" text-anchor="middle">${pc(v,0)}</text>`};
+ const tip=`<title>${lb}\nMinggu A: ${rp(tA)} (${pc(pa)})\nMinggu B: ${rp(tB)} (${pc(1-pa)})</title>`;
+ let s=`<svg class="pie" viewBox="0 0 200 200" role="img" aria-label="Pie ${lb}: Minggu A ${pc(pa)}, Minggu B ${pc(1-pa)}">${tip}`;
+ if(tA<=0||tB<=0)s+=`<circle cx="${c}" cy="${c}" r="${r}" fill="${col}" ${tA>0?'opacity=".4"':""}/>${lab(0,1,1)}`;
+ else{const [x,y]=pt(pa),la=pa>.5?1:0;
+  s+=`<path d="M${c},${c} L${c},${c-r} A${r},${r} 0 ${la} 1 ${x},${y} Z" fill="${col}" opacity=".4"/>`+
+     `<path d="M${c},${c} L${x},${y} A${r},${r} 0 ${1-la} 1 ${c},${c-r} Z" fill="${col}"/>`+lab(0,pa,pa)+lab(pa,1,1-pa)}
+ return s+`<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="var(--panel)" stroke-width="2"/></svg>`}
+function cmp(){
+ const WL=wkList(),ks=WL.map(w=>w.k);if(!ks.length)return;
+ if(!ks.includes(C.b))C.b=ks[ks.length-1];
+ if(!ks.includes(C.a))C.a=ks[Math.max(0,ks.length-2)];
+ const wl=w=>dl(w.s)+" – "+dl(w.e)+" ("+w.idx.length+" hari berdata)";
+ $("#ca").innerHTML=WL.map(w=>`<option value="${w.k}">${wl(w)}</option>`).join("");$("#ca").value=C.a;
+ $("#cw").innerHTML=WL.map(w=>`<option value="${w.k}">${wl(w)}</option>`).join("");$("#cw").value=C.b;
+ const wA=WL.find(w=>w.k==C.a),wB=WL.find(w=>w.k==C.b),nA=wA.idx.length,nB=wB.idx.length,bn=S.br<0?"semua branch":D.branches[S.br].n;
+ const wi=new Map();wA.idx.forEach(i=>wi.set(i,"a"));wB.idx.forEach(i=>wi.set(i,wi.has(i)?"ab":"b"));
+ const A=[0,0,0,0],B=[0,0,0,0];
+ for(const r of D.rows){if(S.br>=0&&r[1]!=S.br)continue;const k=wi.get(r[0]);if(!k)continue;const v=[r[5],r[6],r[3],r[4]];
+  for(let j=0;j<4;j++){if(k.includes("a"))A[j]+=v[j];if(k.includes("b"))B[j]+=v[j]}}
+ $("#cmps").textContent="Minggu A ("+dl(wA.s)+" – "+dl(wA.e)+") dibandingkan dengan Minggu B ("+dl(wB.s)+" – "+dl(wB.e)+"), "+bn+" (mengikuti filter Branch di atas). Setiap pie membandingkan satu jenis data saja: PO dengan PO, CP dengan CP, SMU dengan SMU, Waste dengan Waste. Ukuran irisan = porsi tiap minggu terhadap gabungan kedua minggu.";
+ const dchip=(x,y,m)=>{if(!x)return'<span class="chip n">–</span>';const d=y/x-1,up=d>=0,c=m=="waste"?(up?"r":"g"):m=="smu"?(up?"g":"r"):"n";return`<span class="chip ${c}">${up?"▲":"▼"} ${pc(Math.abs(d))}</span>`};
+ $("#cg").innerHTML=MK.map(([m,lb],j)=>{const tA=A[j],tB=B[j],aA=dv(tA,nA),aB=dv(tB,nB);
+  return`<div class="cc"><h3><s style="background:var(--${m})"></s>${lb}</h3>${pie(tA,tB,`var(--${m})`,lb)}
+  <table><thead><tr><th></th><th>Minggu A</th><th>Minggu B</th><th>Selisih</th></tr></thead><tbody>
+  <tr><td>Total</td><td>${rp(tA)}</td><td>${rp(tB)}</td><td>${dchip(tA,tB,m)}</td></tr>
+  <tr><td>Rata-rata/hari</td><td>${rp(aA)}</td><td>${rp(aB)}</td><td>${dchip(aA,aB,m)}</td></tr></tbody></table></div>`}).join("");
+ $("#cnote").textContent=(nA!=nB?"Minggu A berisi "+nA+" hari berdata dan Minggu B "+nB+" hari, jadi irisan pie dipengaruhi jumlah hari; bandingkan juga baris Rata-rata/hari. ":"Kedua minggu berisi "+nA+" hari berdata. ")+"Selisih Waste: naik berwarna merah, turun hijau. Selisih SMU: naik hijau, turun merah. PO dan CP netral."}
+$("#ca").onchange=e=>{C.a=e.target.value;cmp()};
+$("#cw").onchange=e=>{C.b=e.target.value;cmp()};
+$("#cx").onclick=()=>{[C.a,C.b]=[C.b,C.a];cmp()};
 init();
 /* ===== Data live dari Google Sheets ===== */
-const SHEET_URL="https://docs.google.com/spreadsheets/d/1QuInDy-fl7GoEw5_du6KNKXRQinpHcRDo4O_xAasMmY/edit?usp=sharing";
+const SHEET_URL="https://docs.google.com/spreadsheets/d/1QuInDy-fl7GoEw5_do4O_xAasMmY/edit?usp=sharing";
 const REFRESH_MIN=5;
 const SID=SHEET_URL.match(/\/d\/([\w-]+)/)[1];
 //<pure>
