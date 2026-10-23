@@ -175,7 +175,7 @@ function render(){
  else if(S.view=="mingguan"){first="Minggu";title="Rekap mingguan, "+ml(S.mo);P1=W.map(w=>({...sum(w.s,w.e,T),l:w.label+" ("+dl(w.s)+"–"+dl(w.e)+")",c:"M"+w.i,on:w.i==S.wk})).filter(x=>x.n)}
  else{first="Bulan";title="Rekap bulanan";P1=months.map(m=>({...sum(m+"-01",mEnd(m),T),l:ml(m),c:MON[+m.slice(5)-1].slice(0,3),on:m==S.mo}))}
  $("#ct").textContent=title.replace("Rekap","Grafik");$("#tt").textContent=title+" – "+bn;
- chart(P1,$("#ch"));extra();cmp();
+ chart(P1,$("#ch"));extra();try{cmp()}catch(e){$("#cnote").textContent="Perbandingan minggu gagal ditampilkan: "+e.message}
  const ex=S.view!="harian";
  $("#tb").innerHTML=P1.length?`<table><thead><tr><th>${first}</th><th>PO</th><th>CP</th><th>SMU</th><th>Waste</th><th>Waste % SMU</th><th>% Terjual</th>${ex?"<th>Hari</th><th>SMU/hari</th>":""}</tr></thead><tbody>`+
   [...P1,{...K,l:S.view=="bulanan"?"Total "+ml(S.mo):"Total",tot:1}].map(x=>{if(S.view=="bulanan"&&x.tot)return"";const w=dv(x.waste,x.smu);return`<tr class="${x.tot?"tot":""}" ${x.on?'style="background:var(--hi)"':""}><td>${x.l}</td><td>${rp(x.po)}</td><td>${rp(x.cp)}</td><td>${rp(x.smu)}</td><td>${rp(x.waste)}</td><td><span class="chip ${cls(w)}">${pc(w)}</span></td><td>${pc(dv(x.smu,x.po+x.cp))}</td>${ex?`<td>${x.n}</td><td>${rp(dv(x.smu,x.n))}</td>`:""}</tr>`}).join("")+"</tbody></table>":'<div class="empty">Tidak ada data untuk pilihan ini.</div>';
@@ -281,13 +281,27 @@ function build(M,SM,W,P){
  return{dates,products,branches:bs.map(n=>({n,k:mm.has(n)?mm.get(n).k:"-",am:mm.has(n)?mm.get(n).am:"-"})),
   rows:A.map(o=>[di.get(o.d),bi.get(o.b),pi.get(o.p),r2(o.v[0]),r2(o.v[1]),r2(o.v[2]),r2(o.v[3])])}}
 //</pure>
-async function gv(name){
- const r=await fetch(`https://docs.google.com/spreadsheets/d/${SID}/gviz/tq?tqx=out:json&headers=0&sheet=${encodeURIComponent(name)}`,{cache:"no-store"});
- if(!r.ok)throw new Error("tab "+name+": HTTP "+r.status);
- const t=await r.text(),m=t.match(/setResponse\(([\s\S]*)\);?\s*$/);
- if(!m)throw new Error("tab "+name+": respons bukan data (pastikan spreadsheet dibagikan Siapa saja yang memiliki link)");
- const j=JSON.parse(m[1]);if(j.status!=="ok")throw new Error("tab "+name+": "+((j.errors&&j.errors[0]&&j.errors[0].message)||"error"));
+const gvUrl=(name,extra)=>`https://docs.google.com/spreadsheets/d/${SID}/gviz/tq?tqx=out:json${extra||""}&headers=0&sheet=${encodeURIComponent(name)}`;
+function gvRows(name,j){
+ if(!j||j.status!=="ok")throw new Error("tab "+name+": "+((j&&j.errors&&j.errors[0]&&(j.errors[0].detailed_message||j.errors[0].message))||"error"));
  return j.table.rows.map(x=>(x.c||[]).map(c=>c?c.v:null))}
+/* Cadangan tanpa CORS: memuat lewat tag <script> (JSONP), cocok untuk GitHub Pages */
+function gvp(name){return new Promise((res,rej)=>{
+ const id="gvcb"+Math.random().toString(36).slice(2),sc=document.createElement("script");let done=false,tm;
+ const fin=()=>{done=true;clearTimeout(tm);try{delete window[id]}catch(e){window[id]=undefined}if(sc.parentNode)sc.parentNode.removeChild(sc)};
+ window[id]=j=>{if(done)return;fin();try{res(gvRows(name,j))}catch(e){rej(e)}};
+ sc.onerror=()=>{if(!done){fin();rej(new Error("tab "+name+": tidak bisa dimuat. Pastikan spreadsheet dibagikan 'Siapa saja yang memiliki link' (Viewer) dan nama tab benar"))}};
+ tm=setTimeout(()=>{if(!done){fin();rej(new Error("tab "+name+": tidak ada respons. Pastikan spreadsheet dibagikan 'Siapa saja yang memiliki link' (Viewer) dan ID spreadsheet benar"))}},20000);
+ sc.src=gvUrl(name,";responseHandler:"+id);document.head.appendChild(sc)})}
+async function gv(name){
+ try{
+  const r=await fetch(gvUrl(name),{cache:"no-store"});
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const t=await r.text(),m=t.match(/setResponse\(([\s\S]*)\);?\s*$/);
+  if(!m)throw new Error("respons bukan data");
+  return gvRows(name,JSON.parse(m[1]))
+ }catch(e1){
+  try{return await gvp(name)}catch(e2){throw new Error(e2.message+" [fetch: "+e1.message+"]")}}}
 function applyData(nd){
  const bn=S.br>=0?D.branches[S.br].n:null;D=nd;calc();
  if(!months.includes(S.mo))S.mo=months[months.length-1];
