@@ -283,15 +283,15 @@ function build(M,SM,W,P){
 //</pure>
 const gvUrl=(name,extra)=>`https://docs.google.com/spreadsheets/d/${SID}/gviz/tq?tqx=out:json${extra||""}&headers=0&sheet=${encodeURIComponent(name)}`;
 function gvRows(name,j){
- if(!j||j.status!=="ok")throw new Error("tab "+name+": "+((j&&j.errors&&j.errors[0]&&(j.errors[0].detailed_message||j.errors[0].message))||"error"));
+ if(!j||j.status!=="ok")throw new Error("ditolak Google: "+((j&&j.errors&&j.errors[0]&&(j.errors[0].detailed_message||j.errors[0].message))||"error"));
  return j.table.rows.map(x=>(x.c||[]).map(c=>c?c.v:null))}
 /* Cadangan tanpa CORS: memuat lewat tag <script> (JSONP), cocok untuk GitHub Pages */
 function gvp(name){return new Promise((res,rej)=>{
  const id="gvcb"+Math.random().toString(36).slice(2),sc=document.createElement("script");let done=false,tm;
  const fin=()=>{done=true;clearTimeout(tm);try{delete window[id]}catch(e){window[id]=undefined}if(sc.parentNode)sc.parentNode.removeChild(sc)};
  window[id]=j=>{if(done)return;fin();try{res(gvRows(name,j))}catch(e){rej(e)}};
- sc.onerror=()=>{if(!done){fin();rej(new Error("tab "+name+": tidak bisa dimuat. Pastikan spreadsheet dibagikan 'Siapa saja yang memiliki link' (Viewer) dan nama tab benar"))}};
- tm=setTimeout(()=>{if(!done){fin();rej(new Error("tab "+name+": tidak ada respons. Pastikan spreadsheet dibagikan 'Siapa saja yang memiliki link' (Viewer) dan ID spreadsheet benar"))}},20000);
+ sc.onerror=()=>{if(!done){fin();rej(new Error("script gagal dimuat"))}};
+ tm=setTimeout(()=>{if(!done){fin();rej(new Error("tidak ada respons 20 dtk"))}},20000);
  sc.src=gvUrl(name,";responseHandler:"+id);document.head.appendChild(sc)})}
 async function gv(name){
  try{
@@ -301,7 +301,7 @@ async function gv(name){
   if(!m)throw new Error("respons bukan data");
   return gvRows(name,JSON.parse(m[1]))
  }catch(e1){
-  try{return await gvp(name)}catch(e2){throw new Error(e2.message+" [fetch: "+e1.message+"]")}}}
+  try{return await gvp(name)}catch(e2){throw new Error("fetch: "+e1.message+"; cadangan: "+e2.message)}}}
 function applyData(nd){
  const bn=S.br>=0?D.branches[S.br].n:null;D=nd;calc();
  if(!months.includes(S.mo))S.mo=months[months.length-1];
@@ -312,13 +312,17 @@ function applyData(nd){
  $("#src").textContent="PT Tangga Hijau Kreasi, kategori Buah. Data sampai "+dl(last)+" "+last.slice(0,4);
  render()}
 let liveOk=false,busy=false;
+const TABS=["Master","SMU","Waste","PO-CP"];
 async function live(){
  if(busy)return;busy=true;const b=$("#rf"),el=$("#live");b.disabled=true;el.style.color="";el.textContent="Mengambil data dari Google Sheets…";
- try{const [M,SM,W,P]=await Promise.all(["Master","SMU","Waste","PO-CP"].map(gv));
-  const nd=build(M,SM,W,P);if(!nd.rows.length)throw new Error("tidak ada baris data yang terbaca");
+ try{
+  const res=await Promise.allSettled(TABS.map(gv)),ok=res.map(r=>r.status==="fulfilled");
+  const st=TABS.map((t,i)=>t+(ok[i]?" ✓ "+nf.format(res[i].value.length)+" baris":" ✗ ("+res[i].reason.message+")")).join(" | ");
+  if(!ok[1]||!ok[2]||!ok[3])throw new Error("Status tab: "+st+". ID spreadsheet: "+SID+" ("+SID.length+" karakter, ID normal sekitar 44 karakter)");
+  const nd=build(ok[0]?res[0].value:[],res[1].value,res[2].value,res[3].value);if(!nd.rows.length)throw new Error("tidak ada baris data yang terbaca. Status tab: "+st);
   applyData(nd);liveOk=true;
-  el.textContent="Live dari Google Sheets, diperbarui "+new Date().toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})+" ("+nf.format(nd.rows.length)+" baris rekap). Otomatis tiap "+REFRESH_MIN+" menit."}
- catch(e){el.style.color="#ffd36b";el.textContent="Gagal memuat dari Google Sheets ("+e.message+"). Menampilkan "+(liveOk?"data terakhir yang berhasil dimuat":"snapshot")+"."}
+  el.textContent="Live dari Google Sheets, diperbarui "+new Date().toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})+" ("+nf.format(nd.rows.length)+" baris rekap). "+(ok[0]?"":"Tab Master gagal dimuat, kolom branch/AM bisa kosong. ")+"Otomatis tiap "+REFRESH_MIN+" menit."}
+ catch(e){el.style.color="#ffd36b";el.textContent="Gagal memuat dari Google Sheets. "+e.message+". Menampilkan "+(liveOk?"data terakhir yang berhasil dimuat":"snapshot")+"."}
  b.disabled=false;busy=false}
 $("#rf").onclick=live;
 setInterval(live,REFRESH_MIN*60000);
